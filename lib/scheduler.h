@@ -35,7 +35,11 @@ struct Result {
     using value_type = T;
     std::vector<Task>* tasks_;
     int taskid_;
-    T getResult() {return tasks_[0][taskid_].template get<T>();}
+    T getResult() {
+        if (taskid_ < 0 || taskid_ >= static_cast<int>(tasks_[0].size()))
+            throw std::out_of_range("Invalid task ID");
+        return tasks_[0][taskid_].template get<T>();
+    }
     Result(int taskid, std::vector<Task>* tasks) : taskid_(taskid), tasks_(tasks) {};
 };
 
