@@ -1,6 +1,11 @@
-[English](README.md)
+# Task Scheduler
 
-# TTaskScheduler
+> [English version](README.md)
+
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/17)
+[![CMake](https://img.shields.io/badge/CMake-3.14%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
+[![GTest](https://img.shields.io/badge/tested_with-GTest-4285F4?logo=google&logoColor=white)](https://github.com/google/googletest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Header-only планировщик задач на C++17, выполняющий граф взаимозависимых вычислений. Задачи заранее объявляют свои входные данные — в том числе результаты ещё не выполненных задач — а планировщик автоматически разрешает граф зависимостей, вычисляя каждую задачу не более одного раза.
 
@@ -15,20 +20,16 @@ float a = 1, b = -2, c = 0;
 
 TTaskScheduler scheduler;
 
-// -4ac
 auto id1 = scheduler.add([](float a, float c) { return -4 * a * c; }, a, c);
 
-// b² + (-4ac)
 auto id2 = scheduler.add([](float b, float v) { return b * b + v; },
                           b, scheduler.getFutureResult<float>(id1));
 
-// (-b + sqrt(D)) и (-b - sqrt(D))
 auto id3 = scheduler.add([](float b, float d) { return -b + std::sqrt(d); },
                           b, scheduler.getFutureResult<float>(id2));
 auto id4 = scheduler.add([](float b, float d) { return -b - std::sqrt(d); },
                           b, scheduler.getFutureResult<float>(id2));
 
-// x₁ = id3 / 2a,  x₂ = id4 / 2a
 auto id5 = scheduler.add([](float a, float v) { return v / (2 * a); },
                           a, scheduler.getFutureResult<float>(id3));
 auto id6 = scheduler.add([](float a, float v) { return v / (2 * a); },
@@ -45,25 +46,18 @@ std::cout << scheduler.getResult<float>(id6) << "\n"; // x₂
 ## API
 
 ```cpp
-// Зарегистрировать задачу. Возвращает дескриптор задачи.
 auto id = scheduler.add(callable, arg1, arg2);  // 0–2 аргумента
-
-// Получить ленивую ссылку на будущий результат задачи (используется как аргумент другой задачи).
 auto future = scheduler.getFutureResult<T>(id);
-
-// Получить результат задачи, вычислив его (и зависимости) при необходимости.
 T result = scheduler.getResult<T>(id);
-
-// Выполнить все зарегистрированные задачи в порядке зависимостей.
 scheduler.executeAll();
 ```
 
-**Поддерживаемые типы callable:** лямбды, указатели на функции, указатели на методы класса.  
-**Максимум аргументов на задачу:** 2 (экземпляр класса считается аргументом для указателей на методы).
+**Поддерживаемые callable:** лямбды, указатели на функции, указатели на методы класса.  
+**Максимум аргументов на задачу:** 2.
 
 ## Реализация
 
-Планировщик использует **стирание типов (type erasure)** для хранения разнотипных callable-объектов в одном контейнере. Каждая задача оборачивается за интерфейсом `ICallable` с тремя специализациями:
+Планировщик использует **стирание типов (type erasure)** для хранения разнотипных callable в одном контейнере. Каждая задача оборачивается за интерфейсом `ICallable` с тремя специализациями:
 
 | Класс | Аргументы |
 |-------|-----------|
@@ -71,37 +65,15 @@ scheduler.executeAll();
 | `Derived1<F, R, A>` | один (с разворачиванием `FutureResult`) |
 | `Derived2<F, R, A, B>` | два (с разворачиванием `FutureResult` для любого аргумента) |
 
-Аргументы типа `FutureResult<T>` определяются на этапе компиляции через `is_future_result_v` и разрешаются вызовом `getResult` на задаче-источнике перед запуском callable.
-
 ## Сборка
 
 ```bash
 mkdir build && cd build
 cmake ..
 cmake --build .
-```
-
-Запустить пример с квадратным уравнением:
-
-```bash
-./bin/main
-```
-
-Запустить тесты:
-
-```bash
+./bin/main          # пример с квадратным уравнением
 ctest --output-on-failure
 ```
-
-## Тесты
-
-Набор тестов на **Google Test**, охватывающий:
-
-- Примитивные типы данных в качестве аргументов и результатов задач
-- Ссылки `FutureResult` и цепочки зависимостей
-- Ссылки на объекты (указатели на методы классов)
-- Гарантии порядка выполнения
-- Контейнерные типы как значения задач
 
 ## Требования
 

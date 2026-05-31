@@ -1,6 +1,11 @@
-[Русский](README_RU.md)
+# Task Scheduler
 
-# TTaskScheduler
+> [Русская версия](README_RU.md)
+
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/17)
+[![CMake](https://img.shields.io/badge/CMake-3.14%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
+[![GTest](https://img.shields.io/badge/tested_with-GTest-4285F4?logo=google&logoColor=white)](https://github.com/google/googletest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A header-only C++17 task scheduler that executes a graph of data-dependent computations. Tasks declare their inputs upfront — including results of tasks that haven't run yet — and the scheduler resolves the dependency graph automatically, computing each task at most once.
 
