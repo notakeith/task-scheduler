@@ -1,99 +1,108 @@
-# Лабораторная работа 9
+# TTaskScheduler
 
-Шедулер задач
+A header-only C++17 task scheduler that executes a graph of data-dependent computations. Tasks declare their inputs upfront — including results of tasks that haven't run yet — and the scheduler resolves the dependency graph automatically, computing each task at most once.
 
-## Задача
+## How it works
 
-Вашей задачей будет разработать класс отвечающий за выполнение связанных по данным между собой задач.
-Часто, чтобы решить какую либо задачу, требуется выполнить граф вычислений, где узел графа это задача, ребро связь между результатом выполнения одной задачи и параметром для запуска другой. Вам предстоит разработать класс **TTaskScheduler** , решающий подобную задачу.
+The central idea is `getFutureResult<T>(id)`: a typed forward reference to the output of a task that will be evaluated later. When `getResult` or `executeAll` is called, the scheduler resolves each `FutureResult` by computing its source task on demand (lazy evaluation with result caching).
 
-Пример такой задачи - нахождение корней квадратного уравнения (предполагаем что коэффициенты гарантирует что корня 2). Решение подобной задачи в лоб - подразумевает вычисление корня из дискриминанта дважды.  Очевидно, что это не оптимально.
-
-
-Вот так мог бы выглядеть код для решение данной задачи с помощью TTaskScheduler
+**Example — quadratic equation roots:**
 
 ```cpp
-struct AddNumber {
-  float add(float a) const {
-    return a + number;
-  }
-
-  float number;
-};
-
-float a = 1;
-float b = -2;
-float c = 0;
-AddNumber add{
-  .number = 3
-};
+float a = 1, b = -2, c = 0;
 
 TTaskScheduler scheduler;
 
-auto id1 = scheduler.add([](float a, float c) {return -4 * a * c;}, a, c);
+// -4ac
+auto id1 = scheduler.add([](float a, float c) { return -4 * a * c; }, a, c);
 
-auto id2 = scheduler.add([](float b, float v) {return b * b + v;}, b, scheduler.getFutureResult<float>(id1));
+// b² + (-4ac)
+auto id2 = scheduler.add([](float b, float v) { return b * b + v; },
+                          b, scheduler.getFutureResult<float>(id1));
 
-auto id3 = scheduler.add([](float b, float d) {return -b + std::sqrt(d);}, b, scheduler.getFutureResult<float>(id2));
+// (-b + sqrt(D)) and (-b - sqrt(D))
+auto id3 = scheduler.add([](float b, float d) { return -b + std::sqrt(d); },
+                          b, scheduler.getFutureResult<float>(id2));
+auto id4 = scheduler.add([](float b, float d) { return -b - std::sqrt(d); },
+                          b, scheduler.getFutureResult<float>(id2));
 
-auto id4 = scheduler.add([](float b, float d) {return -b - std::sqrt(d);}, b, scheduler.getFutureResult<float>(id2));
-
-auto id5 = scheduler.add([](float a, float v) {return v/(2*a);}, a, scheduler.getFutureResult<float>(id3));
-
-auto id6 = scheduler.add([]{float a, float v} {return v/(2*a);}, a, scheduler.getFutureResult<float>(id4));
-
-auto id7 = scheduler.add(&AddNumber::add, add, scheduler.getFutureResult<float>(id6));
+// x₁ = id3 / 2a,  x₂ = id4 / 2a
+auto id5 = scheduler.add([](float a, float v) { return v / (2 * a); },
+                          a, scheduler.getFutureResult<float>(id3));
+auto id6 = scheduler.add([](float a, float v) { return v / (2 * a); },
+                          a, scheduler.getFutureResult<float>(id4));
 
 scheduler.executeAll();
 
-std::cout << "x1 = " << scheduler.getResult<float>(id5) << std::endl;
-std::cout << "x2 = " << scheduler.getResult<float>(id6) << std::endl;
-std::cout << "x3 = " << scheduler.getResult<float>(id7) << std::endl;
+std::cout << scheduler.getResult<float>(id5) << "\n"; // x₁
+std::cout << scheduler.getResult<float>(id6) << "\n"; // x₂
 ```
 
-Где getFutureResult это результат выполнения задачи в будущем,
+`sqrt(D)` is computed once even though both `id5` and `id6` depend on it.
 
-### Публичный интефейс TTaskScheduler
+## API
 
- - **add** - принимает в качестве аргумента задание для него. Возвращает объект описывающий добавленную таску.
- - **getFutureResult<T>** - возвращает объект, из которого в будущем можно получить результат задания, переданного в качестве результата типа Т
- - **getResult<T>** - возвращает результат выполнения задания определенного типа. Вычисляет его если оно еще не подсчитано, при это не происходит вычисления не нужных заданий
- - **executeAll** - выполняет все запланированные задания
+```cpp
+// Register a task. Returns a task handle.
+auto id = scheduler.add(callable, arg1, arg2);  // 0–2 arguments
 
-### Требования и ограничения к заданиям
+// Get a lazy reference to a task's future result (use as an argument to another task).
+auto future = scheduler.getFutureResult<T>(id);
 
-  - [Callable object](https://en.cppreference.com/w/cpp/named_req/Callable)
-  - Количество аргументов не больше 2
-  - Задание может быть указателем на метод класса. В таком случае первый аргумент является классом, от которого будет вызван метод. Сам класс тоже считается аргументом
+// Retrieve the result of a task, computing it (and its dependencies) if needed.
+T result = scheduler.getResult<T>(id);
 
-## Ограничения
+// Execute all registered tasks in dependency order.
+scheduler.executeAll();
+```
 
- Запрещено использовать стандартную библиотеку, за исключением [контейнеров](https://en.cppreference.com/w/cpp/container) и [умных указателей](https://en.cppreference.com/w/cpp/memory).
+**Supported callable types:** lambdas, function pointers, member function pointers.  
+**Maximum arguments per task:** 2 (the instance counts as an argument for member functions).
 
-## Тесты
+## Implementation
 
-Все вышеуказанный класс должен быть покрыты тестами, с помощью фреймворка [Google Test](http://google.github.io/googletest).
+The scheduler uses **type erasure** to store heterogeneous callables in a single container. Each task is wrapped behind an `ICallable` interface with three specializations:
 
-Тесты также являются частью задания, поэтому покрытие будет влиять на максимальный балл.
+| Class | Arguments |
+|-------|-----------|
+| `Derived0<F, R>` | none |
+| `Derived1<F, R, A>` | one (with `FutureResult` unwrapping) |
+| `Derived2<F, R, A, B>` | two (with `FutureResult` unwrapping for either argument) |
 
-## NB
+`FutureResult<T>` arguments are detected at compile time via `is_future_result_v` and resolved by calling `getResult` on the referenced task before invoking the callable.
 
-1. В данной работе могут быть использованы идеи [Type Erasure](https://en.wikibooks.org/wiki/More_C%2B%2B_Idioms/Type_Erasure) который мы разбирали на лекции
-2. Мы поговорили с вам про std::forward, подумайте над тем где это может быть применимо в данной задаче
-3. Получаемые расписания не всегда могут быть выполнимы, предлагается подумать что делать в таких ситуациях
+## Build
 
-## ТеорМин
+```bash
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
 
-1. Lambda
-2. Type erasure (какую проблему решает, как реализуется, примеры из стандартной библиотеки)
-3. Value categories
-4. RValue reference
-5. Move Semantics
+Run the quadratic equation example:
 
-## Deadline
+```bash
+./bin/main
+```
 
-1. 23.04.25 23:59 0.8
-2. 30.04.25 23:59 0.65
-3. 07.05.25 23:59 0.5
+Run tests:
 
-Максимальное количество баллов - 15
+```bash
+ctest --output-on-failure
+```
+
+## Tests
+
+Test suite built with **Google Test**, covering:
+
+- Primitive data types as task arguments/results
+- `FutureResult` forward references and dependency chains
+- Object references (member function pointers)
+- Execution ordering guarantees
+- Container types as task values
+
+## Requirements
+
+- C++17
+- CMake 3.14+
+- Google Test (fetched automatically via CMake FetchContent)
