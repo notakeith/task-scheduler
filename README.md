@@ -1,3 +1,5 @@
+[Русский](README_RU.md)
+
 # TTaskScheduler
 
 A header-only C++17 task scheduler that executes a graph of data-dependent computations. Tasks declare their inputs upfront — including results of tasks that haven't run yet — and the scheduler resolves the dependency graph automatically, computing each task at most once.
